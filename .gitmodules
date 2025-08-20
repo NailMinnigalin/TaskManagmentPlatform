@@ -1,0 +1,6 @@
+[submodule "TMPAuthenticationService"]
+	path = TMPAuthenticationService
+	url = https://github.com/NailMinnigalin/TMPAuthenticationService
+[submodule "TMPTaskService"]
+	path = TMPTaskService
+	url = https://github.com/NailMinnigalin/TMPTaskService
