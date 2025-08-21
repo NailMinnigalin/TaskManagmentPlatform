@@ -1,0 +1,57 @@
+﻿services:
+  tmpauthenticationservicedb:
+    image: postgres
+    container_name: tmpauthenticationservicedb
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: tmpauthenticationservicedb
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d tmpauthenticationservicedb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  tmpauthenticationservice:
+    build:
+      context: ..\TMPAuthenticationService\TMPAuthenticationService
+      dockerfile: Dockerfile
+    container_name: tmpauthenticationservice
+    ports:
+     - "5001:8080"
+    depends_on:
+      tmpauthenticationservicedb:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "Host=tmpauthenticationservicedb;Port=5432;Database=tmpauthenticationservicedb;Username=myuser;Password=mypassword"
+      DataBaseInit: "true"
+  tmptaskservicedb:
+    image: postgres
+    container_name: tmptaskservicedb
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: tmptaskservicedb
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d tmptaskservicedb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  tmptaskservice:
+    build:
+      context: ..\TMPTaskService\TMPTaskService
+      dockerfile: Dockerfile
+    container_name: tmptaskservice
+    ports:
+     - "5000:8080"
+    depends_on:
+      tmptaskservicedb:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "Host=tmptaskservicedb;Port=5432;Database=tmptaskservicedb;Username=myuser;Password=mypassword"
+      ConnectionStrings__AuthenticationService: "http://tmpauthenticationservice:8080"
