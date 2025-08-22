@@ -43,7 +43,7 @@ namespace EndToEndTesting.ServiceSpace
 			throw new Exception("Нет свободных портов в диапазоне");
 		}
 
-		static bool IsPortFree(int port)
+		static private bool IsPortFree(int port)
 		{
 			if (_allocatedPorts.Contains(port))
 			{
