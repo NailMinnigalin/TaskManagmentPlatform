@@ -33,9 +33,9 @@ namespace EndToEndTesting
 		{
 			_serviceGuid = Guid.NewGuid();
 			_taskServiceContainerName = $"tmptaskservice{_serviceGuid}";
-			_taskServiceImageName = $"tmptaskservice{_serviceGuid}:test";
+			_taskServiceImageName = $"tmptaskservice:test";
 			_authenticationServiceContainerName = $"tmpauthenticationservice{_serviceGuid}";
-			_authenticationServiceImageName = $"tmpauthenticationservice{_serviceGuid}:test";
+			_authenticationServiceImageName = $"tmpauthenticationservice:test";
 			_taskServiceDbContainerName = $"tmptaskservicedb{_serviceGuid}";
 			_authenticationServiceDbContainerName = $"tmpauthenticationservicedb{_serviceGuid}";
 		}
@@ -195,6 +195,11 @@ namespace EndToEndTesting
 
 		private async Task DeleteImageAsync(string imageName)
 		{
+			if (!await IsImageExits(imageName))
+			{
+				return;
+			}
+
 			using var client = new DockerClientConfiguration().CreateClient();
 			await client.Images.DeleteImageAsync(
 				imageName,
