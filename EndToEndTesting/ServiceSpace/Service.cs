@@ -7,6 +7,8 @@ namespace EndToEndTesting.ServiceSpace
 	{
 		private string _taskServiceImageName;
 		private string _authenticationServiceImageName;
+		private int _authServicePort;
+		private int _taskServicePort;
 		private INetwork _network;
         private IContainer _authDb;
         private IContainer _authService;
@@ -16,7 +18,17 @@ namespace EndToEndTesting.ServiceSpace
         public async Task BuildAsync()
 		{
 			ServiceBuilder serviceBuilder = new ServiceBuilder();
-			(_network, _authDb, _authService, _taskDb, _taskService, _taskServiceImageName, _authenticationServiceImageName) = await serviceBuilder.BuildAsync();
+			(
+				_network, 
+				_authDb, 
+				_authService, 
+				_taskDb, 
+				_taskService, 
+				_taskServiceImageName, 
+				_authenticationServiceImageName, 
+				_authServicePort, 
+				_taskServicePort
+			) = await serviceBuilder.BuildAsync();
 		}
 
 		public async Task DisposeServices()
@@ -42,6 +54,11 @@ namespace EndToEndTesting.ServiceSpace
 			};
 			
 			await Task.WhenAll(tasks);
+		}
+
+		public async Task<string> SetAuthRequest(string userName)
+		{
+			throw new NotImplementedException();
 		}
 	}
 }

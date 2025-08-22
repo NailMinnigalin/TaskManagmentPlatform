@@ -29,9 +29,22 @@ namespace EndToEndTesting.ServiceSpace
 			_authenticationServiceImageName = $"tmpauthenticationservice:test";
 			_taskServiceDbContainerName = $"tmptaskservicedb{_serviceGuid}";
 			_authenticationServiceDbContainerName = $"tmpauthenticationservicedb{_serviceGuid}";
+
+
 		}
 
-		public async Task<(INetwork network, IContainer authDb, IContainer authService, IContainer taskDb, IContainer taskService, string taskServiceImageName, string authenticationServiceImageName)> BuildAsync()
+		public async Task<(
+			INetwork network, 
+			IContainer authDb, 
+			IContainer authService, 
+			IContainer taskDb, 
+			IContainer taskService, 
+			string taskServiceImageName, 
+			string authenticationServiceImageName,
+			int authServicePort,
+			int taskServicePort
+		)> 
+			BuildAsync()
 		{
 			INetwork network;
 			IContainer authDb;
@@ -40,56 +53,62 @@ namespace EndToEndTesting.ServiceSpace
 			IContainer taskService;
 
 			network = await BuildNetwork();
-			(taskDb, taskService) = await BuildTaskService(network);
-			(authDb, authService) = await BuildAuthService(network);
+			(taskDb, taskService, int taskServicePort) = await BuildTaskService(network);
+			(authDb, authService, int authServicePort) = await BuildAuthService(network);
 
-			return (network, authDb, authService, taskDb, taskService, _taskServiceImageName, _authenticationServiceImageName);
+			return (network, authDb, authService, taskDb, taskService, _taskServiceImageName, _authenticationServiceImageName, authServicePort, taskServicePort);
 		}
 
-		private async Task<(IContainer taskDb, IContainer taskService)> BuildTaskService(INetwork network)
+		private async Task<(IContainer taskDb, IContainer taskService, int taskServicePort)> BuildTaskService(INetwork network)
 		{
-			var taskDb = await BuildDbContainer(_taskServiceDbContainerName, 5433, network);
+			var taskDb = await BuildDbContainer(_taskServiceDbContainerName, FindFreePort(), network);
 			var taskServiceImage = await FindOrBuildServiceImage(_taskServiceImageName, "../../../../TMPTaskService/TMPTaskService");
-			var taskService = await BuildTaskServiceFromImage(taskServiceImage, taskDb, network);
+			(var taskService, int taskServicePort) = await BuildTaskServiceFromImage(taskServiceImage, taskDb, network);
 
-			return (taskDb, taskService);
+			return (taskDb, taskService, taskServicePort);
 		}
 
-		private async Task<(IContainer authDb, IContainer authService)> BuildAuthService(INetwork network)
+		private async Task<(IContainer authDb, IContainer authService, int authServicePort)> BuildAuthService(INetwork network)
 		{
-			var authDb = await BuildDbContainer(_authenticationServiceDbContainerName, 5432, network);
+			var authDb = await BuildDbContainer(_authenticationServiceDbContainerName, FindFreePort(), network);
 			var authServiceImage = await FindOrBuildServiceImage(_authenticationServiceImageName, "../../../../TMPAuthenticationService/TMPAuthenticationService");
-			var authService = await BuildAuthServiceFromImage(authServiceImage, authDb, network);
+			(var authService, int authServicePort) = await BuildAuthServiceFromImage(authServiceImage, authDb, network);
 
-			return (authDb, authService);
+			return (authDb, authService, authServicePort);
 		}
 
-		private async Task<IContainer> BuildTaskServiceFromImage(IImage taskImage, IContainer taskDb, INetwork network)
+		private async Task<(IContainer taskService, int taskServicePort)> BuildTaskServiceFromImage(IImage taskImage, IContainer taskDb, INetwork network)
 		{
-			return await BuildServiceFromImage(
+			int taskServicePort = FindFreePort();
+			var taskService = await BuildServiceFromImage(
 				serviceContainerName: _taskServiceContainerName, 
 				serviceImage: taskImage, 
 				dbContainerName: _taskServiceDbContainerName, 
 				dependsOn: taskDb,
-				serviceOutPort: 5002,
+				serviceOutPort: taskServicePort,
 				network: network,
 				additionalEnvironment: new Dictionary<string, string>()
 				{
 					{ "ConnectionStrings__AuthenticationService",  $"http://{_authenticationServiceContainerName}:{_serviceInsidePort}"}
 				}
 			);
+
+			return (taskService, taskServicePort);
 		}
 
-		private async Task<IContainer> BuildAuthServiceFromImage(IImage authServiceImage, IContainer authDb, INetwork network)
+		private async Task<(IContainer authContainer, int authContainerOutPort)> BuildAuthServiceFromImage(IImage authServiceImage, IContainer authDb, INetwork network)
 		{
-			return await BuildServiceFromImage(
+			int authServicePort = FindFreePort();
+			var authService = await BuildServiceFromImage(
 				serviceContainerName: _authenticationServiceContainerName, 
 				serviceImage: authServiceImage, 
 				dbContainerName: _authenticationServiceDbContainerName, 
 				dependsOn: authDb,
 				network: network,
-				serviceOutPort: 5001
+				serviceOutPort: authServicePort
 			);
+
+			return (authService, authServicePort);
 		}
 
 		private async Task<INetwork> BuildNetwork()
@@ -157,6 +176,11 @@ namespace EndToEndTesting.ServiceSpace
 			await dbContainer.StartAsync();
 
 			return dbContainer;
+		}
+
+		private int FindFreePort()
+		{
+			return ImageHelper.FindFreePortInRange(5000, 5999);
 		}
 	}
 }
