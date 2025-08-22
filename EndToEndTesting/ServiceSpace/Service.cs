@@ -1,5 +1,8 @@
 ﻿using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Networks;
+using System.Net.Http.Json;
+using TMPAuthenticationService.Controllers;
+using TMPTaskService.Controllers;
 
 namespace EndToEndTesting.ServiceSpace
 {
@@ -56,9 +59,27 @@ namespace EndToEndTesting.ServiceSpace
 			await Task.WhenAll(tasks);
 		}
 
-		public async Task<string> SetAuthRequest(string userName)
+		public async Task<string> SendAuthRequest(string userName)
 		{
-			throw new NotImplementedException();
+			AuthenticationRequest authenticationRequest = new() { UserName = userName };
+			HttpClient httpClient = new HttpClient();
+			var response = await httpClient.PostAsJsonAsync($"http://localhost:{_authServicePort}/api/Authentication/Authentication", authenticationRequest);
+
+			var authenticationResponse = await response.Content.ReadFromJsonAsync<AuthenticationResponse>();
+			if (authenticationResponse == null)
+			{
+				throw new Exception("AuthenticationRequest didn't return AuthenticationResponse object");
+			}
+
+			return authenticationResponse.Jwt;
+		}
+
+		public async Task<HttpResponseMessage> SendCreateTaskRequest(TaskRequestDTO taskRequestDTO)
+		{
+			HttpClient httpClient = new HttpClient();
+			var response = await httpClient.PostAsJsonAsync($"http://localhost:{_taskServicePort}/api/Task/CreateTask", taskRequestDTO);
+
+			return response;
 		}
 	}
 }

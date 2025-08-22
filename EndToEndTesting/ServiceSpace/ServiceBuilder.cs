@@ -2,6 +2,7 @@
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Images;
 using DotNet.Testcontainers.Networks;
+using System.Net;
 
 namespace EndToEndTesting.ServiceSpace
 {
@@ -150,7 +151,16 @@ namespace EndToEndTesting.ServiceSpace
 				.WithEnvironment("ConnectionStrings__DefaultConnection", $"Host={dbContainerName};Port={_dbInsidePort};Database={dbContainerName};Username={_dbUser};Password={_dbPassword}")
 				.WithEnvironment("DataBaseInit", "true")
 				.WithEnvironment(additionalEnvironment)
-				.DependsOn(dependsOn);
+				.DependsOn(dependsOn)
+				.WithWaitStrategy(Wait
+					.ForUnixContainer()
+					.UntilPortIsAvailable(_serviceInsidePort)
+					.UntilHttpRequestIsSucceeded(req => req
+						.ForPort((ushort)_serviceInsidePort)
+						.ForPath("/scalar/v1")
+						.WithMethod(HttpMethod.Get)
+					)
+				);
 
 			var service = serviceBuilder.Build();
 

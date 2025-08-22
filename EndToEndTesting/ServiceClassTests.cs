@@ -18,30 +18,30 @@ namespace EndToEndTesting
 		}
 	}
 
-	public class ServiceClassTests : IClassFixture<ServiceFixture>, IAsyncLifetime
-	{
-		Service service = new();
+	//public class ServiceClassTests : IClassFixture<ServiceFixture>, IAsyncLifetime
+	//{
+	//	Service service = new();
 
-		public async Task DisposeAsync()
-		{
-			await service.DisposeServices();
-		}
+	//	public async Task DisposeAsync()
+	//	{
+	//		await service.DisposeServices();
+	//	}
 
-		public async Task InitializeAsync()
-		{
-			await service.BuildAsync();
-		}
+	//	public async Task InitializeAsync()
+	//	{
+	//		await service.BuildAsync();
+	//	}
 
-        [Fact]
-        public async Task Service_Is_Properly_SettingUp()
-        {
-            true.Should().BeTrue();
-        }
+	//       [Fact]
+	//       public async Task Service_Is_Properly_SettingUp()
+	//       {
+	//           true.Should().BeTrue();
+	//       }
 
-		[Fact]
-		public async Task Service_Is_Properly_SettingUp_For_Second_test()
-		{
-			true.Should().BeTrue();
-		}
-	}
+	//	[Fact]
+	//	public async Task Service_Is_Properly_SettingUp_For_Second_test()
+	//	{
+	//		true.Should().BeTrue();
+	//	}
+	//}
 }

@@ -17,6 +17,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\TMPAuthenticationService\TMPAuthenticationService\TMPAuthenticationService.csproj" />
+    <ProjectReference Include="..\TMPTaskService\TMPTaskService\TMPTaskService.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 
