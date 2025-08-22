@@ -1,5 +1,6 @@
 ﻿using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Networks;
+using Newtonsoft.Json.Linq;
 using System.Net.Http.Json;
 using TMPAuthenticationService.Controllers;
 using TMPTaskService.Controllers;
@@ -74,12 +75,51 @@ namespace EndToEndTesting.ServiceSpace
 			return authenticationResponse.Jwt;
 		}
 
-		public async Task<HttpResponseMessage> SendCreateTaskRequest(TaskRequestDTO taskRequestDTO)
+		public async Task<HttpResponseMessage> SendCreateTaskRequest(TaskRequestDTO taskRequestDTO, string? jwt = null)
 		{
 			HttpClient httpClient = new HttpClient();
-			var response = await httpClient.PostAsJsonAsync($"http://localhost:{_taskServicePort}/api/Task/CreateTask", taskRequestDTO);
 
-			return response;
+			var request = new HttpRequestMessage(HttpMethod.Post, $"http://localhost:{_taskServicePort}/api/Task/CreateTask");
+			request.Content = JsonContent.Create(taskRequestDTO);
+
+			if (jwt != null)
+			{
+				request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", jwt);
+			}
+			
+			return await httpClient.SendAsync(request);
 		}
+
+		public async Task<List<TaskReturnDTO>> SendFindTasksRequest(TaskRequestDTO taskRequestDTO)
+		{
+			HttpClient httpClient = new HttpClient();
+			return await httpClient.GetFromJsonAsync<List<TaskReturnDTO>>($"http://localhost:{_taskServicePort}/api/Task/FindTasks?{ToQueryString(taskRequestDTO)}");
+		}
+
+		public async Task<HttpResponseMessage> SendDeleteTaskRequest(Guid taskId, string? jwt = null)
+		{
+			HttpClient httpClient = new HttpClient();
+
+			var request = new HttpRequestMessage(HttpMethod.Delete, $"http://localhost:{_taskServicePort}/api/Task/DeleteTask/{taskId}");
+
+			if (jwt != null)
+			{
+				request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", jwt);
+			}
+
+			return await httpClient.SendAsync(request);
+		}
+
+		private static string ToQueryString(object obj)
+        {
+            if (obj == null) return string.Empty;
+
+            var properties = from property in obj.GetType().GetProperties()
+                             let value = property.GetValue(obj)
+                             where value != null
+                             select $"{Uri.EscapeDataString(property.Name)}={Uri.EscapeDataString(value.ToString()!)}";
+
+            return string.Join("&", properties);
+        }
 	}
 }
