@@ -1,4 +1,5 @@
-﻿using FluentAssertions;
+﻿using EndToEndTesting.ServiceSpace;
+using FluentAssertions;
 
 namespace EndToEndTesting
 {
