@@ -9,17 +9,18 @@ namespace EndToEndTesting
 {
 	public class Service
 	{
-		private const string _taskServiceContainerName = "tmptaskservice";
-		private const string _taskServiceImageName = "tmptaskservice:test";
-		private const string _authenticationServiceContainerName = "tmpauthenticationservice";
-		private const string _authenticationServiceImageName = "tmpauthenticationservice:test";
-		private const string _taskServiceDbContainerName = "tmptaskservicedb";
-		private const string _authenticationServiceDbContainerName = "tmpauthenticationservicedb";
-		private const string _enviroment = "Development";
-		private const int _dbInsidePort = 5432; //For pg always 5432
-		private const string _dbUser = "myuser";
-		private const string _dbPassword = "mypassword";
-		private const int _serviceInsidePort = 8080;
+		private readonly string _taskServiceContainerName;
+		private readonly string _taskServiceImageName;
+		private readonly string _authenticationServiceContainerName;
+		private readonly string _authenticationServiceImageName;
+		private readonly string _taskServiceDbContainerName;
+		private readonly string _authenticationServiceDbContainerName;
+		private readonly string _environment = "Development";
+		private readonly int _dbInsidePort = 5432; //For pg always 5432
+		private readonly string _dbUser = "myuser";
+		private readonly string _dbPassword = "mypassword";
+		private readonly int _serviceInsidePort = 8080;
+		private readonly Guid _serviceGuid;
 		private INetwork _network;
         private IContainer _authDb;
         private IContainer _authService;
@@ -27,15 +28,29 @@ namespace EndToEndTesting
         private IContainer _taskService;
         private IImage _authServiceImage;
         private IImage _taskServiceImage;
-
+		
+		public Service()
+		{
+			_serviceGuid = Guid.NewGuid();
+			_taskServiceContainerName = $"tmptaskservice{_serviceGuid}";
+			_taskServiceImageName = $"tmptaskservice{_serviceGuid}:test";
+			_authenticationServiceContainerName = $"tmpauthenticationservice{_serviceGuid}";
+			_authenticationServiceImageName = $"tmpauthenticationservice{_serviceGuid}:test";
+			_taskServiceDbContainerName = $"tmptaskservicedb{_serviceGuid}";
+			_authenticationServiceDbContainerName = $"tmpauthenticationservicedb{_serviceGuid}";
+		}
 
         public async Task BuildAsync()
 		{
 			await BuildNetWork();
-			await BuildAuthDbContainer();
-			await BuildTaskDbContainer();
-			await BuildAuthService();
-			await BuildTaskService();
+
+			var tasks = new List<Task>
+			{
+				BuildAuthService(),
+				BuildTaskService()
+			};
+			
+			await Task.WhenAll(tasks);
 		}
 
 		public async Task DisposeServices()
@@ -63,85 +78,62 @@ namespace EndToEndTesting
 			await Task.WhenAll(tasks);
 		}
 
-		private async Task DeleteImageAsync(string imageName)
-		{
-			using var client = new DockerClientConfiguration().CreateClient();
-			await client.Images.DeleteImageAsync(
-				imageName,
-				new ImageDeleteParameters { Force = true, NoPrune = true }
-			);
-		}
-
 		private async Task BuildTaskService()
 		{
-			await BuildTaskServiceImage();
+			_taskDb = await BuildDbContainer(_taskServiceDbContainerName, 5433);
+			_taskServiceImage = await FindOrBuildServiceImage(_taskServiceImageName, "../../../../TMPTaskService/TMPTaskService");
 			await BuildTaskServiceFromImage();
 		}
 
 		private async Task BuildAuthService()
 		{
-			await BuildAuthServiceImage();
+			_authDb = await BuildDbContainer(_authenticationServiceDbContainerName, 5432);
+			_authServiceImage = await FindOrBuildServiceImage(_authenticationServiceImageName, "../../../../TMPAuthenticationService/TMPAuthenticationService");
 			await BuildAuthServiceFromImage();
 		}
 
 		private async Task BuildTaskServiceFromImage()
 		{
-			_taskService = new ContainerBuilder()
-				.WithName(_taskServiceContainerName)
-				.WithImage(_taskServiceImage)
-				.WithNetwork(_network)
-				.WithNetworkAliases(_taskServiceContainerName)
-				.WithPortBinding(5000, _serviceInsidePort)
-				.WithEnvironment("ASPNETCORE_ENVIRONMENT", _enviroment)
-				.WithEnvironment("ConnectionStrings__DefaultConnection", $"Host={_taskServiceDbContainerName};Port={_dbInsidePort};Database={_taskServiceDbContainerName};Username={_dbUser};Password={_dbPassword}")
-				.WithEnvironment("ConnectionStrings__AuthenticationService", $"http://{_authenticationServiceContainerName}:{_serviceInsidePort}")
-				.DependsOn(_taskDb)
-				.Build();
-
-			await _taskService.StartAsync();
-		}
-
-		private async Task BuildTaskServiceImage()
-		{
-			if (!await IsImageExits(_taskServiceImageName))
-			{
-				var futureImage = new ImageFromDockerfileBuilder()
-					.WithName(_taskServiceImageName)
-					.WithDockerfileDirectory("../../../../TMPTaskService/TMPTaskService")
-					.WithDockerfile("Dockerfile")
-					.WithCleanUp(true)
-					.Build();
-
-				await futureImage.CreateAsync();
-			}
-			
-			_taskServiceImage = new DockerImage(_taskServiceImageName);
+			_taskService = await BuildServiceFromImage(
+				serviceContainerName: _taskServiceContainerName, 
+				serviceImage: _taskServiceImage, 
+				dbContainerName: _taskServiceDbContainerName, 
+				dependsOn: _authDb,
+				serviceOutPort: 5002,
+				additionalEnvironment: new Dictionary<string, string>()
+				{
+					{ "ConnectionStrings__AuthenticationService",  $"http://{_authenticationServiceContainerName}:{_serviceInsidePort}"}
+				}
+			);
 		}
 
 		private async Task BuildAuthServiceFromImage()
 		{
-			_authService = new ContainerBuilder()
-				.WithName(_authenticationServiceContainerName)
-				.WithImage(_authServiceImage)
-				.WithNetwork(_network)
-				.WithNetworkAliases(_authenticationServiceContainerName)
-				.WithPortBinding(5001, _serviceInsidePort)
-				.WithEnvironment("ASPNETCORE_ENVIRONMENT", _enviroment)
-				.WithEnvironment("ConnectionStrings__DefaultConnection", $"Host={_authenticationServiceDbContainerName};Port={_dbInsidePort};Database={_authenticationServiceDbContainerName};Username={_dbUser};Password={_dbPassword}")
-				.WithEnvironment("DataBaseInit", "true")
-				.DependsOn(_authDb)
-				.Build();
-
-			await _authService.StartAsync();
+			_authService = await BuildServiceFromImage(
+				serviceContainerName: _authenticationServiceContainerName, 
+				serviceImage: _authServiceImage, 
+				dbContainerName: _authenticationServiceDbContainerName, 
+				dependsOn: _authDb,
+				serviceOutPort: 5001
+			);
 		}
 
-		private async Task BuildAuthServiceImage()
+		private async Task BuildNetWork()
 		{
-			if (!await IsImageExits(_authenticationServiceImageName))
+			_network = new NetworkBuilder()
+				.WithName(_serviceGuid.ToString("N"))
+				.Build();
+
+			await _network.CreateAsync();
+		}
+
+		private async Task<IImage> FindOrBuildServiceImage(string serviceImageName, string dockerFilePath)
+		{
+			if (!await IsImageExits(serviceImageName))
 			{
 				var futureImage = new ImageFromDockerfileBuilder()
-					.WithName(_authenticationServiceImageName)
-					.WithDockerfileDirectory("../../../../TMPAuthenticationService/TMPAuthenticationService")
+					.WithName(serviceImageName)
+					.WithDockerfileDirectory(dockerFilePath)
 					.WithDockerfile("Dockerfile")
 					.WithCleanUp(true)
 					.Build();
@@ -149,7 +141,28 @@ namespace EndToEndTesting
 				await futureImage.CreateAsync();
 			}
 
-			_authServiceImage = new DockerImage(_authenticationServiceImageName);
+			return new DockerImage(serviceImageName);
+		}
+
+		private async Task<IContainer> BuildServiceFromImage(string serviceContainerName, IImage serviceImage, string dbContainerName, IContainer dependsOn, int serviceOutPort, Dictionary<string, string>? additionalEnvironment = null)
+		{
+			var serviceBuilder = new ContainerBuilder()
+				.WithName(serviceContainerName)
+				.WithImage(serviceImage)
+				.WithNetwork(_network)
+				.WithNetworkAliases(serviceContainerName)
+				.WithPortBinding(serviceOutPort, _serviceInsidePort)
+				.WithEnvironment("ASPNETCORE_ENVIRONMENT", _environment)
+				.WithEnvironment("ConnectionStrings__DefaultConnection", $"Host={dbContainerName};Port={_dbInsidePort};Database={dbContainerName};Username={_dbUser};Password={_dbPassword}")
+				.WithEnvironment("DataBaseInit", "true")
+				.WithEnvironment(additionalEnvironment)
+				.DependsOn(dependsOn);
+
+			var service = serviceBuilder.Build();
+
+			await service.StartAsync();
+
+			return service;
 		}
 
 		private async Task<bool> IsImageExits(string imageName)
@@ -161,47 +174,32 @@ namespace EndToEndTesting
 				.Any(x => x.RepoTags.Contains(imageName));
 		}
 
-		private async Task BuildTaskDbContainer()
+		private async Task<IContainer> BuildDbContainer(string containerName, int outPort)
 		{
-			_taskDb = new ContainerBuilder()
-				.WithName(_taskServiceDbContainerName)
+			var dbContainer = new ContainerBuilder()
+				.WithName(containerName)
 				.WithImage("postgres:latest")
 				.WithNetwork(_network)
-				.WithNetworkAliases(_taskServiceDbContainerName)
+				.WithNetworkAliases(containerName)
 				.WithEnvironment("POSTGRES_USER", _dbUser)
 				.WithEnvironment("POSTGRES_PASSWORD", _dbPassword)
-				.WithEnvironment("POSTGRES_DB", _taskServiceDbContainerName)
-				.WithPortBinding(_dbInsidePort, _dbInsidePort)
-				.WithWaitStrategy(Wait.ForUnixContainer().UntilCommandIsCompleted($"pg_isready -U {_dbUser} -d {_taskServiceDbContainerName}"))
+				.WithEnvironment("POSTGRES_DB", containerName)
+				.WithPortBinding(outPort, _dbInsidePort)
+				.WithWaitStrategy(Wait.ForUnixContainer() .UntilCommandIsCompleted($"pg_isready -U {_dbUser} -d {containerName}"))
 				.Build();
-			
-			await _taskDb.StartAsync();
+
+			await dbContainer.StartAsync();
+
+			return dbContainer;
 		}
 
-		private async Task BuildAuthDbContainer()
+		private async Task DeleteImageAsync(string imageName)
 		{
-			_authDb = new ContainerBuilder()
-				.WithName(_authenticationServiceDbContainerName)
-				.WithImage("postgres:latest")
-				.WithNetwork(_network)
-				.WithNetworkAliases(_authenticationServiceDbContainerName)
-				.WithEnvironment("POSTGRES_USER", _dbUser)
-				.WithEnvironment("POSTGRES_PASSWORD", _dbPassword)
-				.WithEnvironment("POSTGRES_DB", _authenticationServiceDbContainerName)
-				.WithPortBinding(5433, _dbInsidePort)
-				.WithWaitStrategy(Wait.ForUnixContainer() .UntilCommandIsCompleted($"pg_isready -U {_dbUser} -d {_authenticationServiceDbContainerName}"))
-				.Build();
-
-			await _authDb.StartAsync();
-		}
-
-		private async Task BuildNetWork()
-		{
-			_network = new NetworkBuilder()
-				.WithName(Guid.NewGuid().ToString("N"))
-				.Build();
-
-			await _network.CreateAsync();
+			using var client = new DockerClientConfiguration().CreateClient();
+			await client.Images.DeleteImageAsync(
+				imageName,
+				new ImageDeleteParameters { Force = true, NoPrune = true }
+			);
 		}
 	}
 }
